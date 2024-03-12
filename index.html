@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Editable with Vue 3</title>
+    <script src="https://cdn.staticfile.org/vue/3.3.7/vue.global.prod.min.js"></script>
+    <style>
+        .content-editable {
+            min-height: 100px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="content-editable" contenteditable="true" ref="customTextarea" @blur="saveLastRange"></div>
+        <button @click="insertText('普通文本')">插入文本</button>
+        <button @click="insertImage({icon: 'https://via.placeholder.com/150', title: '11'})">插入图片1</button>
+        <button @click="insertImage({icon: 'https://via.placeholder.com/100', title: '22'})">插入图片2</button>
+        <button @click="extractContent">确认</button>
+    </div>
+
+    <script>
+        Vue.createApp({
+            data() {
+                return {
+                    lastRange: null,
+                };
+            },
+            methods: {
+                saveLastRange() {
+                    const sel = window.getSelection();
+                    if (sel.rangeCount > 0) {
+                        this.lastRange = sel.getRangeAt(0);
+                    }
+                },
+                insertContent(html) {
+                    const div = this.$refs.customTextarea;
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    if (this.lastRange) {
+                        sel.addRange(this.lastRange);
+                    } else {
+                        const range = document.createRange();
+                        range.selectNodeContents(div);
+                        range.collapse(false); // Move cursor to the end
+                        sel.addRange(range);
+                    }
+
+                    const range = sel.getRangeAt(0);
+                    range.deleteContents();
+                    const el = document.createElement('div');
+                    el.innerHTML = html;
+                    let frag = document.createDocumentFragment(), node, lastNode;
+                    while ((node = el.firstChild)) {
+                        lastNode = frag.appendChild(node);
+                    }
+                    range.insertNode(frag);
+
+                    // Move the cursor after the last inserted node
+                    if (lastNode) {
+                        range.setStartAfter(lastNode);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+
+                    this.lastRange = null; // Reset lastRange after insertion
+                },
+                insertText(text) {
+                    this.insertContent(text);
+                },
+                insertImage(originData) {
+                    const imgHtml = `<img src="${originData.icon}" data-id="${originData.title}">`;
+                    this.insertContent(imgHtml);
+                },
+                extractContent() {
+                    const div = this.$refs.customTextarea;
+                    let output = [], currentText = '';
+
+                    Array.from(div.childNodes).forEach(node => {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            currentText += node.nodeValue; // 累积连续的文本节点内容
+                        } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'IMG') {
+                            if (currentText) {
+                                // 如果有累积的文本，先将其作为一个对象推送到输出数组中
+                                output.push({ type: "text", content: currentText });
+                                currentText = ''; // 累积文本内容推送后清空
+                            }
+                            // 推送图片节点的对象
+                            output.push({ type: 'img', id: node.getAttribute('data-id') });
+                        }
+                    });
+
+                    // 确保最后累积的文本内容也被包括
+                    if (currentText) {
+                        output.push({ type: "text", content: currentText });
+                    }
+
+                    console.log(output);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
